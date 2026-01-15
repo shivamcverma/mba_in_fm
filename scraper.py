@@ -22,14 +22,27 @@ PCOMBA_QD_URL="https://www.shiksha.com/tags/pharma-tdp-611834?type=discussion"
 
 def create_driver():
     options = Options()
-    options.add_argument("--disable-gpu")
+
+    # Mandatory for GitHub Actions
+    options.add_argument("--headless=new")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--disable-gpu")
     options.add_argument("--window-size=1920,1080")
-    options.add_argument("user-agent=Mozilla/5.0")
+
+    # Optional but good
+    options.add_argument(
+        "user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    )
+
+    # Important for Ubuntu runner
+    options.binary_location = "/usr/bin/chromium"
+
+    service = Service(ChromeDriverManager().install())
 
     return webdriver.Chrome(
-        service=Service(ChromeDriverManager().install()),
+        service=service,
         options=options
     )
 
@@ -1220,176 +1233,6 @@ def extract_overview_data(driver):
 #     career_data["sections"] = sections
 #     return career_data
 
-# def scrape_admission_overview(driver):
-#     driver.get(PCOMBA_ADDMISSION_URL)
-#     soup = BeautifulSoup(driver.page_source, "html.parser")
-
-#     data = {
-#         "title": None,
-#         "updated_on": None,
-#         "author": None,
-#         "overview": [],
-#         "sections": []
-#     }
-
-#     # ---------------- TITLE ----------------
-#     title = soup.find("div", class_="a54c")
-#     data["title"] = title.get_text(strip=True) if title else None
-
-#     # ---------------- META SECTION ----------------
-#     section1 = soup.find(id="chp_admission_overview")
-#     if section1:
-#         updated_div = section1.select_one(".f48b div span")
-#         data["updated_on"] = updated_div.get_text(strip=True) if updated_div else None
-
-#         author_block = section1.select_one(".be8c p._7417 a")
-#         author_role = section1.select_one(".be8c p._7417 span.b0fc")
-
-#         data["author"] = {
-#             "name": author_block.get_text(strip=True) if author_block else None,
-#             "profile_url": author_block["href"] if author_block else None,
-#             "role": author_role.get_text(strip=True) if author_role else None
-#         }
-
-#     # ---------------- MAIN CONTENT ----------------
-#     section = soup.find("div", id="wikkiContents_chp_admission_overview_0")
-#     if not section:
-#         return data
-
-#     main_container = section.find("div")
-#     if not main_container:
-#         return data
-
-#     # Extract introduction paragraphs
-#     intro_paras = []
-#     for el in main_container.find_all(["p", "h2", "h3"], recursive=True):
-#         if el.name in ["h2", "h3"]:
-#             break  # stop at first heading
-#         text = el.get_text(" ", strip=True)
-#         if text:
-#             intro_paras.append(text)
-
-#     data["overview"] = intro_paras
-
-#     # Extract sections with improved logic
-#     current_section = None
-#     processed_tables = set()  # Track processed tables to avoid duplicates
-    
-#     for element in main_container.find_all(["h2", "h3", "p", "ul", "table"]):
-        
-#         # Skip if element is inside a table that's already been processed
-#         parent_table = element.find_parent("table")
-#         if parent_table and id(parent_table) in processed_tables:
-#             continue
-            
-#         if element.name in ["h2", "h3"]:
-#             if current_section:
-#                 data["sections"].append(current_section)
-#             current_section = {"heading": element.get_text(strip=True), "content": []}
-        
-#         elif current_section:
-#             if element.name == "p":
-#                 text = element.get_text(" ", strip=True)
-#                 if text:
-#                     # Check if this text is just repeating table headers
-#                     is_table_repeat = False
-#                     for content_item in current_section["content"]:
-#                         if "rows" in content_item:
-#                             for row in content_item["rows"]:
-#                                 if any(text in cell for cell in row):
-#                                     is_table_repeat = True
-#                                     break
-#                         if is_table_repeat:
-#                             break
-                    
-#                     if not is_table_repeat:
-#                         current_section["content"].append({"text": text})
-            
-#             elif element.name == "ul":
-#                 # Check if this ul is inside a table
-#                 if not element.find_parent("table"):
-#                     items = [li.get_text(" ", strip=True) for li in element.find_all("li") if li.get_text(strip=True)]
-#                     if items:
-#                         # Check if these items are already in table rows
-#                         is_duplicate = False
-#                         for content_item in current_section["content"]:
-#                             if "rows" in content_item:
-#                                 for row in content_item["rows"]:
-#                                     for item in items:
-#                                         if any(item in cell for cell in row):
-#                                             is_duplicate = True
-#                                             break
-#                             if is_duplicate:
-#                                 break
-                        
-#                         if not is_duplicate:
-#                             current_section["content"].append({"items": items})
-            
-#             elif element.name == "table":
-#                 # Mark this table as processed
-#                 processed_tables.add(id(element))
-                
-#                 rows = []
-#                 for row in element.find_all("tr"):
-#                     cells = [cell.get_text(" ", strip=True) for cell in row.find_all(["th", "td"])]
-#                     if cells:
-#                         rows.append(cells)
-                
-#                 if rows:
-#                     current_section["content"].append({"rows": rows})
-
-#     # Add the last section
-#     if current_section:
-#         data["sections"].append(current_section)
-
-#     # Post-process to remove duplicate items that are already in tables
-#     for section in data["sections"]:
-#         clean_content = []
-#         table_data = []
-        
-#         # First collect all table data
-#         for item in section["content"]:
-#             if "rows" in item:
-#                 table_data.extend(item["rows"])
-        
-#         # Then filter content
-#         for item in section["content"]:
-#             if "items" in item:
-#                 # Check if these items are duplicates of table data
-#                 is_duplicate = False
-#                 for table_row in table_data:
-#                     for table_cell in table_row:
-#                         for list_item in item["items"]:
-#                             if list_item in table_cell or table_cell in list_item:
-#                                 is_duplicate = True
-#                                 break
-#                         if is_duplicate:
-#                             break
-#                     if is_duplicate:
-#                         break
-                
-#                 if not is_duplicate:
-#                     clean_content.append(item)
-#             elif "text" in item:
-#                 # Check if text is duplicate of table data
-#                 is_duplicate = False
-#                 for table_row in table_data:
-#                     for table_cell in table_row:
-#                         if item["text"] in table_cell or table_cell in item["text"]:
-#                             is_duplicate = True
-#                             break
-#                     if is_duplicate:
-#                         break
-                
-#                 if not is_duplicate:
-#                     clean_content.append(item)
-#             else:
-#                 clean_content.append(item)
-        
-#         section["content"] = clean_content
-
-#     return data
-
 # def scrape_top_colleges_article(driver):
 #     driver.get(PCOMBA_A_URL)
 #     time.sleep(5)
@@ -1924,9 +1767,11 @@ def scrape_mba_colleges():
 
 
 
-import time
+import os
 
-DATA_FILE =  "distance_mba_data.json"
+TEMP_FILE = "distance_mba_data.tmp.json"
+FINAL_FILE = "distance_mba_data.json"
+
 UPDATE_INTERVAL = 6 * 60 * 60  # 6 hours
 
 def auto_update_scraper():
@@ -1939,9 +1784,13 @@ def auto_update_scraper():
 
     print("🔄 Scraping started")
     data = scrape_mba_colleges()
-    with open(DATA_FILE, "w", encoding="utf-8") as f:
+    with open(TEMP_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
-    print("✅ Data scraped & saved successfully")
+
+    # Atomic swap → replaces old file with new one safely
+    os.replace(TEMP_FILE, FINAL_FILE)
+
+    print("✅ Data scraped & saved successfully (atomic write)")
 
 if __name__ == "__main__":
 
